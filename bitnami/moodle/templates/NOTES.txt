@@ -62,29 +62,17 @@ host. To configure Moodle to use and external database host:
 
 {{- include "moodle.checkRollingTags" . }}
 
-{{- $requiredPasswords := list -}}
-
-{{- if not .Values.existingSecret }}
-  {{- $requiredMoodlePassword := dict "valueKey" "moodlePassword" "secret" (include "moodle.fullname" .) "field" "moodle-password" -}}
-  {{- $requiredPasswords = append $requiredPasswords $requiredMoodlePassword -}}
+{{- $passwordErrors := list -}}
+{{- if not .Values.existingSecret -}}
+  {{- $requiredMoodlePassword := dict "valueKey" "moodlePassword" "secret" (include "moodle.fullname" .) "field" "moodle-password" "context" $ -}}
+  {{- $requiredMoodlePasswordError := include "common.validations.values.single.empty" $requiredMoodlePassword -}}
+  {{- $passwordErrors =  append $passwordErrors $requiredMoodlePasswordError -}}
 {{- end -}}
 
-{{- if and (not .Values.mariadb.existingSecret) .Values.mariadb.enabled -}}
-  {{- $mariadbSecretName := include "moodle.mariadb.fullname" . -}}
+{{- $passwordMysqlErrors := include "common.validations.values.mariadb.passwords" (dict "secretName" (include "moodle.mariadb.fullname" .) "context" $) -}}
+{{- $passwordErrors = append $passwordErrors $passwordMysqlErrors -}}
 
-  {{- $requiredRootMariadbPassword := dict "valueKey" "mariadb.rootUser.password" "secret" $mariadbSecretName "field" "mariadb-root-password" -}}
-  {{- $requiredPasswords = append $requiredPasswords $requiredRootMariadbPassword -}}
-
-   {{- if not (empty .Values.mariadb.db.user) -}}
-      {{- $requiredMariadbPassword := dict "valueKey" "mariadb.db.password" "secret" $mariadbSecretName "field" "mariadb-password" -}}
-      {{- $requiredPasswords = append $requiredPasswords $requiredMariadbPassword -}}
-   {{- end -}}
-
-   {{- if .Values.mariadb.replication.enabled -}}
-      {{- $requiredReplicationPassword := dict "valueKey" "mariadb.replication.password" "secret" $mariadbSecretName "field" "mariadb-replication-password" -}}
-      {{- $requiredPasswords = append $requiredPasswords $requiredReplicationPassword -}}
-   {{- end -}}
-{{- end -}}
+{{- include "common.errors.upgrade.passwords.empty" (dict "validationErrors" $passwordErrors "context" $) -}}
 
 {{- if and .Values.externalDatabase.host .Release.IsUpgrade  -}}
   {{- $externaldbSecretName := printf "%s-%s" .Release.Name "externaldb" -}}
@@ -93,5 +81,3 @@ host. To configure Moodle to use and external database host:
 WARNING: Review values for the following password in the command, if they are correct please ignore this notice.
   {{- include "common.validations.values.multiple.empty" (dict "required" (list $requiredExternalPassword) "context" $) -}}
 {{- end -}}
-
-{{- include "common.errors.upgrade.passwords.empty" (dict "required" $requiredPasswords "context" $) -}}
